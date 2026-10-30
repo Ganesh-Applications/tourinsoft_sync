@@ -1,0 +1,14 @@
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Dépendances
+/vendor/
+/node_modules/
+
+# Logs / env
+*.log
+.env
