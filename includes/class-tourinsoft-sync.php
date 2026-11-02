@@ -60,6 +60,10 @@ final class Tourinsoft_Sync {
 	 * Lance la synchronisation.
 	 */
         public function sync() {
+                //-- On lève la limite de temps d'exécution de PHP quand le serveur le permet.
+                // @ : certains hébergeurs désactivent set_time_limit() et afficheraient un avertissement.
+                @set_time_limit( 0 );
+
                 Tourinsoft_Sync_Logger::info( 'Début de la synchronisation' );
 
                 try {

@@ -152,7 +152,9 @@ Tourinsoft_Sync::instance()->sync();
 
 > Il n'y a pas encore d'import automatique (tâche planifiée). Les méthodes `activate()` / `deactivate()` de `Tourinsoft_Sync` sont prévues pour l'ajouter.
 
-**Premier import :** il télécharge toutes les images et génère leurs miniatures. Il peut donc être long et dépasser le temps d'exécution maximum de PHP. Les imports suivants sont beaucoup plus rapides.
+### Premier import
+
+Il télécharge toutes les images et génère leurs miniatures. Il peut donc être long. Le plugin lève la limite de temps d'exécution de PHP quand l'hébergeur le permet. Les imports suivants sont beaucoup plus rapides.
 
 ---
 
