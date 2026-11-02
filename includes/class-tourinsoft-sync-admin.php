@@ -77,6 +77,9 @@ class Tourinsoft_Sync_Admin {
 		}
 
 		$lines = Tourinsoft_Sync_Logger::get_last_lines( self::LOG_LINES );
+
+		// Date du prochain import automatique (false si la tâche n'est pas planifiée)
+		$next_run = Tourinsoft_Sync_Cron::next_run();
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -86,6 +89,14 @@ class Tourinsoft_Sync_Admin {
 				<?php wp_nonce_field( self::ACTION ); ?>
 				<?php submit_button( 'Synchroniser', 'primary', 'submit', false ); ?>
 			</form>
+
+			<p>
+				<?php if ( $next_run ) : ?>
+					Prochain import automatique : <strong><?php echo esc_html( wp_date( 'd/m/Y à H:i', $next_run ) ); ?></strong>
+				<?php else : ?>
+					Aucun import automatique n'est planifié.
+				<?php endif; ?>
+			</p>
 
 			<h2>Journal (<?php echo (int) self::LOG_LINES; ?> dernières lignes)</h2>
 			<div class="card" style="max-width: none;">

@@ -25,6 +25,7 @@ require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync-logger.php';
 require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync.php';
 require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync-admin.php';
 require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync-acf.php';
+require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync-cron.php';
 require_once TOURINSOFT_SYNC_PATH . 'includes/class-tourinsoft-sync-importer.php';
 
 register_activation_hook( __FILE__, array( 'Tourinsoft_Sync', 'activate' ) );

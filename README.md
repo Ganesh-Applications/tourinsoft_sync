@@ -139,6 +139,28 @@ Le chemin pointe sur la ou les photos (par exemple `PHOTOSs`). L'URL et le créd
 
 ## Lancer l'import
 
+### Automatiquement
+
+L'import se lance **tous les jours à 3 h** (heure du site, réglée dans *Réglages → Général*) grâce à une tâche planifiée WP-Cron.
+
+- La tâche est créée à l'activation du plugin et supprimée à sa désactivation.
+- La date du prochain import est affichée sur la page **Tourinsoft** de l'admin.
+- Pour changer l'heure, modifier la constante `TIME` dans `includes/class-tourinsoft-sync-cron.php`, puis désactiver et réactiver le plugin pour replanifier la tâche.
+
+> **WP-Cron dépend des visites.** WordPress ne lance ses tâches planifiées que lorsqu'une page est chargée. Sur un site peu visité la nuit, l'import peut donc partir en retard. Pour une heure fiable, désactiver WP-Cron dans `wp-config.php` :
+>
+> ```php
+> define('DISABLE_WP_CRON', true);
+> ```
+>
+> puis ajouter une vraie tâche cron sur le serveur, qui appelle WP-Cron toutes les 5 minutes par exemple :
+>
+> ```
+> */5 * * * * curl -s https://exemple.fr/wp-cron.php?doing_wp_cron > /dev/null
+> ```
+
+### À la main
+
 Menu **Tourinsoft** dans l'admin → bouton **Synchroniser**.
 
 La page affiche ensuite les 100 dernières lignes du journal.
@@ -150,7 +172,6 @@ Depuis le code :
 Tourinsoft_Sync::instance()->sync();
 ```
 
-> Il n'y a pas encore d'import automatique (tâche planifiée). Les méthodes `activate()` / `deactivate()` de `Tourinsoft_Sync` sont prévues pour l'ajouter.
 
 ### Premier import
 
@@ -225,12 +246,11 @@ Ces metas permettent de retrouver les éléments d'un import à l'autre. **Il ne
 
 ## Limites connues
 
-- Pas d'import automatique planifié (voir [Lancer l'import](#lancer-limport)).
 - Contenu flexible, relation, objet de publication et fichier : pas encore gérés.
 - Images : seul le crédit est récupéré (pas de description, pas de texte alternatif).
 - Pas d'image mise en avant automatique.
 - Les images qui ne sont plus utilisées et les termes qui ne servent plus restent dans WordPress. Pour les termes, c'est voulu : un terme peut servir ailleurs sur le site.
-- Si deux imports sont lancés en même temps, des doublons sont possibles.
+- L'heure de l'import automatique se règle dans le code (`Tourinsoft_Sync_Cron::TIME`), pas depuis l'admin.
 
 ---
 
@@ -241,9 +261,10 @@ tourinsoft_sync/
 ├── tourinsoft_sync.php                     Point d'entrée : constantes, chargement des classes, hooks d'activation
 ├── uninstall.php                           Nettoyage à la suppression du plugin
 └── includes/
-    ├── class-tourinsoft-sync.php           Classe principale (singleton) : sync() lance l'import
+    ├── class-tourinsoft-sync.php           Classe principale (singleton) : sync() lance l'import (avec un verrou : un seul import à la fois)
     ├── class-tourinsoft-sync-admin.php     Page d'admin « Tourinsoft » : bouton et journal
     ├── class-tourinsoft-sync-acf.php       Réglages ajoutés à ACF : flux (post type) et chemin (champs)
+    ├── class-tourinsoft-sync-cron.php      Import automatique quotidien (WP-Cron)
     ├── class-tourinsoft-sync-importer.php  Logique d'import
     └── class-tourinsoft-sync-logger.php    Écriture et lecture du journal
 ```
