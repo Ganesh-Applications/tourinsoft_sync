@@ -37,10 +37,41 @@ final class Tourinsoft_Sync {
 	 * Enregistre les hooks.
 	 */
 	private function __construct() {
-		// Ajouter les add_action() / add_filter() ici.
+		if ( is_admin() ) {
+			new Tourinsoft_Sync_Admin();
+		}
+
+		// ACF Pro est requis (acf_add_options_page n'existe pas dans la version gratuite).
+		if ( function_exists( 'acf_add_options_page' ) ) {
+			new Tourinsoft_Sync_Acf();
+		} else {
+			add_action( 'admin_notices', array( $this, 'acf_missing_notice' ) );
+		}
 	}
 
 	/**
+	 * Avertit dans l'admin quand ACF Pro n'est pas actif.
+	 */
+	public function acf_missing_notice() {
+		echo '<div class="notice notice-error"><p>Tourinsoft Sync nécessite le plugin Advanced Custom Fields PRO.</p></div>';
+	}
+
+	/**
+	 * Lance la synchronisation.
+	 */
+        public function sync() {
+                Tourinsoft_Sync_Logger::info( 'Début de la synchronisation' );
+
+                try {
+                        ( new Tourinsoft_Sync_Importer() )->import();
+                } catch ( Exception $e ) {
+                        Tourinsoft_Sync_Logger::error( $e->getMessage() );
+                }
+
+                Tourinsoft_Sync_Logger::info( 'Fin de la synchronisation' );
+        }
+
+        /**
 	 * Exécuté à l'activation du plugin.
 	 */
 	public static function activate() {
