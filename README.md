@@ -129,11 +129,27 @@ Le chemin pointe sur le nœud lui-même (`TYPEHEBERGEMENT` ou `LANGUESPARLEESs`)
 
 ### Images et galeries
 
-Le chemin pointe sur la ou les photos (par exemple `PHOTOSs`). L'URL et le crédit sont lus dans chaque objet photo, à des emplacements fixés dans le code :
+Le **Path Tourinsoft** pointe sur la ou les photos (par exemple `PHOTOSs`). Les champs image et galerie ont en plus trois réglages, dont le chemin **part de la photo** :
+
+| Réglage | Rôle | Exemple |
+|---|---|---|
+| **Path Tourinsoft URL** | URL de l'image à télécharger | `Photo.Url` |
+| **Path Tourinsoft légende** | Remplit la légende du média | `Photo.Credit` |
+| **Path Tourinsoft description** | Remplit la description du média | `Photo.Legende` |
+
+```
+Galerie "photos"
+  Path Tourinsoft              : PHOTOSs          → liste des photos
+  Path Tourinsoft URL          : Photo.Url        → lu dans chaque photo
+  Path Tourinsoft légende      : Photo.Credit
+  Path Tourinsoft description  : Photo.Legende
+```
+
+Si le **Path Tourinsoft URL** est vide, le Path Tourinsoft doit pointer directement sur l'URL ou sur une liste d'URL (par exemple `LOGO` ou `PHOTOSs.*.Photo.Url`). Si les photos sont des objets et qu'aucun chemin d'URL n'est réglé, aucune image n'est importée et un avertissement est écrit dans le journal.
 
 - Une image n'est **téléchargée qu'une seule fois**. Elle est ensuite retrouvée grâce à son URL d'origine.
-- Le **crédit** est enregistré dans la **légende** du média.
-- Si le chemin pointe directement sur une URL (texte), l'image est importée sans crédit.
+- La légende et la description sont **mises à jour** quand elles changent dans Tourinsoft.
+- Si le Path Tourinsoft pointe directement sur une URL (texte), l'image est importée sans légende ni description.
 
 ---
 
@@ -235,6 +251,7 @@ Tourinsoft_Sync_Logger::error('Message');
 |---|---|---|
 | Réglages du post type ACF | `tourinsoft_flux` | URL du flux |
 | Réglages des champs ACF | `tourinsoft_path` | Chemin Tourinsoft |
+| Réglages des champs image / galerie | `tourinsoft_url_path`, `tourinsoft_legend_path`, `tourinsoft_description_path` | Chemins de l'URL, de la légende et de la description, relatifs à la photo |
 | Meta des posts | `tourinsoft_id` | `SyndicObjectID` de l'offre |
 | Meta des posts | `tourinsoft_trashed` | Présente si le post a été mis à la corbeille par l'import |
 | Meta des termes | `tourinsoft_thes_id` | `ThesID` de l'entrée de thésaurus |
@@ -247,7 +264,7 @@ Ces metas permettent de retrouver les éléments d'un import à l'autre. **Il ne
 ## Limites connues
 
 - Contenu flexible, relation, objet de publication et fichier : pas encore gérés.
-- Images : seul le crédit est récupéré (pas de description, pas de texte alternatif).
+- Images : pas de texte alternatif rempli depuis le flux.
 - Pas d'image mise en avant automatique.
 - Les images qui ne sont plus utilisées et les termes qui ne servent plus restent dans WordPress. Pour les termes, c'est voulu : un terme peut servir ailleurs sur le site.
 - L'heure de l'import automatique se règle dans le code (`Tourinsoft_Sync_Cron::TIME`), pas depuis l'admin.

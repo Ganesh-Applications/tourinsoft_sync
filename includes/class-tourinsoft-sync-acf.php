@@ -62,5 +62,36 @@ class Tourinsoft_Sync_Acf {
                         'name' => 'tourinsoft_path',
                         'type' => 'text',
                 ]);
+
+                //-- Champs photo : réglages en plus pour remplir la légende et la description du média
+                if (in_array($field['type'], ['image', 'gallery'], true))
+                        $this->ts_render_photo_settings($field);
+        }
+
+        /**
+         * Ajoute aux champs image et galerie les chemins de l'URL, de la légende et de la description du média.
+         */
+        private function ts_render_photo_settings(array $field): void
+        {
+                acf_render_field_setting($field, [
+                        'label'        => 'Path Tourinsoft URL',
+                        'name'         => 'tourinsoft_url_path',
+                        'type'         => 'text',
+                        'instructions' => 'Chemin <strong>relatif à la photo</strong> de l\'URL de l\'image. Ex. : <code>Photo.Url</code>. Vide : le « Path Tourinsoft » doit pointer directement sur l\'URL (ou une liste d\'URL).',
+                ]);
+
+                acf_render_field_setting($field, [
+                        'label'        => 'Path Tourinsoft légende',
+                        'name'         => 'tourinsoft_legend_path',
+                        'type'         => 'text',
+                        'instructions' => 'Chemin <strong>relatif à la photo</strong> de la valeur à mettre dans la légende du média. Ex. : <code>Photo.Credit</code>.',
+                ]);
+
+                acf_render_field_setting($field, [
+                        'label'        => 'Path Tourinsoft description',
+                        'name'         => 'tourinsoft_description_path',
+                        'type'         => 'text',
+                        'instructions' => 'Chemin <strong>relatif à la photo</strong> de la valeur à mettre dans la description du média. Ex. : <code>Descriptionphoto</code>.',
+                ]);
         }
 }

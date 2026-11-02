@@ -10,12 +10,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Tourinsoft_Sync_Importer
 {
-        //-- Emplacement de l'URL et du crédit dans un objet photo du flux.
-        //-- Ex. : { "Photo": { "Url": "https://...", "Credit": "© Nom" } }
-        //-- À adapter si le flux utilise d'autres noms de clés.
-        const PHOTO_URL_PATH    = 'Photo.Url';
-        const PHOTO_CREDIT_PATH = 'Photo.Credit';
-
         private $num_updated_posts = 0;
         private $num_created_posts = 0;
 
@@ -27,6 +21,9 @@ class Tourinsoft_Sync_Importer
 
         //-- IDs des médias déjà trouvés pendant l'import : [URL d'origine] => ID du média
         private $attachments_cache = [];
+
+        //-- Champs photo déjà signalés comme n'ayant pas de « Path Tourinsoft URL » : [nom du champ] => true
+        private $missing_url_path_fields = [];
 
         /**
          * Importe les données depuis Tourinsoft et les insère dans WordPress.
@@ -219,6 +216,14 @@ class Tourinsoft_Sync_Importer
                                 $node['multiple'] = in_array($field['field_type'] ?? '', ['checkbox', 'multi_select'], true);
                         }
 
+                        if ($field['type'] === 'image' || $field['type'] === 'gallery')
+                        {
+                                //-- Chemins relatifs à la photo, pour l'URL, la légende et la description du média
+                                $node['url_path']         = trim($field['tourinsoft_url_path'] ?? '');
+                                $node['legend_path']      = trim($field['tourinsoft_legend_path'] ?? '');
+                                $node['description_path'] = trim($field['tourinsoft_description_path'] ?? '');
+                        }
+
                         //-- Construit un tableau indicé par clé acf pour correspondre au format attendu par ACF
                         $tree[$field['key']] = $node;
                 }
@@ -296,7 +301,7 @@ class Tourinsoft_Sync_Importer
                                 //-- dans ce cas on prend la première.
                                 $photo = (is_array($source) && isset($source[0])) ? $source[0] : $source;
 
-                                return $this->get_or_create_attachment($photo);
+                                return $this->get_or_create_attachment($photo, $field);
 
                         case 'gallery':
                                 //-- On ramène la source à une liste de photos :
@@ -312,7 +317,7 @@ class Tourinsoft_Sync_Importer
                                 $attachment_ids = [];
                                 foreach ($photos as $photo)
                                 {
-                                        $attachment_id = $this->get_or_create_attachment($photo);
+                                        $attachment_id = $this->get_or_create_attachment($photo, $field);
                                         if ($attachment_id) $attachment_ids[] = $attachment_id;
                                 }
                                 return $attachment_ids;
@@ -418,32 +423,50 @@ class Tourinsoft_Sync_Importer
          * Télécharge l'image dans la médiathèque si elle n'y est pas encore.
          *
          * La photo peut être :
-         *   - un objet du flux : l'URL et le crédit sont lus avec PHOTO_URL_PATH et PHOTO_CREDIT_PATH ;
-         *   - directement une URL (texte) : pas de crédit dans ce cas.
+         *   - un objet du flux : l'URL, la légende et la description sont lues avec les chemins
+         *     réglés sur le champ ACF ('url_path', 'legend_path' et 'description_path') ;
+         *   - directement une URL (texte) : pas de légende ni de description dans ce cas.
          *
          * Le média est retrouvé grâce à son URL d'origine, enregistrée dans la meta
          * 'tourinsoft_url' : une image n'est jamais téléchargée deux fois.
-         * Le crédit est enregistré dans la légende du média, et mis à jour à chaque
-         * import s'il a changé dans Tourinsoft.
+         * La légende et la description sont mises à jour à chaque import si elles ont
+         * changé dans Tourinsoft. Si le flux n'en fournit pas, celles du média ne sont pas modifiées.
          *
          * @param mixed $photo Objet photo du flux, ou URL.
+         * @param array $field Nœud du champ image / galerie (voir build_fields_tree()).
          * @return int|null ID du média, ou null si l'image n'a pas pu être récupérée.
          */
-        private function get_or_create_attachment($photo)
+        private function get_or_create_attachment($photo, array $field)
         {
-                //-- Lecture de l'URL et du crédit
+                //-- Lecture de l'URL, de la légende et de la description
                 if (is_array($photo))
                 {
-                        $url    = $this->get_value_from_path($photo, self::PHOTO_URL_PATH);
-                        $credit = $this->get_value_from_path($photo, self::PHOTO_CREDIT_PATH);
+                        //-- Photo sous forme d'objet sans chemin d'URL réglé : impossible de trouver l'image.
+                        //-- Signalé une seule fois par champ, pour ne pas répéter le message pour chaque photo.
+                        if ($field['url_path'] === '')
+                        {
+                                if (!isset($this->missing_url_path_fields[$field['name']]))
+                                {
+                                        Tourinsoft_Sync_Logger::warning("Champ '{$field['name']}' : les photos sont des objets, il faut régler le « Path Tourinsoft URL » dans ACF.");
+                                        $this->missing_url_path_fields[$field['name']] = true;
+                                }
+                                return null;
+                        }
+
+                        $url = $this->get_value_from_path($photo, $field['url_path']);
+
+                        //-- Champs du média à remplir : légende (post_excerpt) et description (post_content).
+                        //-- Une valeur vide n'est pas retenue : on ne vide pas un texte saisi à la main.
+                        $media_texts = array_filter([
+                                'post_excerpt' => $this->get_photo_text($photo, $field['legend_path']),
+                                'post_content' => $this->get_photo_text($photo, $field['description_path']),
+                        ]);
                 }
                 else
                 {
-                        $url    = $photo;
-                        $credit = null;
+                        $url         = $photo;
+                        $media_texts = [];
                 }
-
-                $credit = is_string($credit) ? trim($credit) : '';
 
                 if (!is_string($url) || !filter_var($url, FILTER_VALIDATE_URL)) return null;
 
@@ -464,15 +487,16 @@ class Tourinsoft_Sync_Importer
                 {
                         $attachment_id = (int) $existing[0];
 
-                        //-- Crédit modifié dans Tourinsoft : on met à jour la légende.
-                        //-- Crédit vide dans le flux : on ne touche pas à la légende (elle a pu être saisie à la main).
-                        if ($credit !== '' && get_post_field('post_excerpt', $attachment_id) !== $credit)
-                        {
-                                wp_update_post([
-                                        'ID'           => $attachment_id,
-                                        'post_excerpt' => $credit,
-                                ]);
-                        }
+                        //-- Légende ou description modifiée dans Tourinsoft : on met à jour le média.
+                        //-- On ne garde que les textes qui ont changé, pour ne rien enregistrer inutilement.
+                        $changed_texts = array_filter(
+                                $media_texts,
+                                fn($text, $wp_field) => html_entity_decode(get_post_field($wp_field, $attachment_id), ENT_QUOTES) !== $text,
+                                ARRAY_FILTER_USE_BOTH
+                        );
+
+                        if ($changed_texts)
+                                wp_update_post(['ID' => $attachment_id] + $changed_texts);
 
                         return $this->attachments_cache[$url] = $attachment_id;
                 }
@@ -514,9 +538,9 @@ class Tourinsoft_Sync_Importer
                         ['name' => $file_name, 'tmp_name' => $tmp_file],
                         0,
                         null,
-                        //-- Crédit dans la légende. Sans crédit, WordPress garde la légende
-                        //-- éventuellement présente dans les métadonnées de la photo.
-                        $credit !== '' ? ['post_excerpt' => $credit] : []
+                        //-- Légende et description lues dans le flux. Pour celles qui manquent,
+                        //-- WordPress garde ce qu'il trouve dans les métadonnées de la photo.
+                        $media_texts
                 );
 
                 if (is_wp_error($attachment_id))
@@ -532,6 +556,22 @@ class Tourinsoft_Sync_Importer
                 Tourinsoft_Sync_Logger::info("Import de l'image '{$file_name}'");
 
                 return $this->attachments_cache[$url] = (int) $attachment_id;
+        }
+
+        /**
+         * Lit un texte dans un objet photo du flux (légende, description...).
+         *
+         * @param array  $photo Objet photo du flux.
+         * @param string $path  Chemin relatif à la photo. Vide : rien à lire.
+         * @return string Le texte, ou '' s'il n'y en a pas.
+         */
+        private function get_photo_text(array $photo, string $path): string
+        {
+                if ($path === '') return '';
+
+                $text = $this->get_value_from_path($photo, $path);
+
+                return is_string($text) ? trim($text) : '';
         }
 
         /**
