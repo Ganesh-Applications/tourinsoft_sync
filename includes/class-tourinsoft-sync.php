@@ -90,8 +90,11 @@ final class Tourinsoft_Sync {
 
                 Tourinsoft_Sync_Logger::info( 'Début de la synchronisation' );
 
+                $start_time = microtime( true );
+                $importer   = new Tourinsoft_Sync_Importer();
+
                 try {
-                        ( new Tourinsoft_Sync_Importer() )->import();
+                        $importer->import();
                 } catch ( Exception $e ) {
                         Tourinsoft_Sync_Logger::error( $e->getMessage() );
                 } finally {
@@ -99,7 +102,18 @@ final class Tourinsoft_Sync {
                         delete_transient( self::LOCK_NAME );
                 }
 
-                Tourinsoft_Sync_Logger::info( 'Fin de la synchronisation' );
+                // Résumé : totaux de tous les flux et durée de l'import
+                $totals   = $importer->get_totals();
+                $duration = (int) round( microtime( true ) - $start_time );
+
+                Tourinsoft_Sync_Logger::info( sprintf(
+                        'Fin de la synchronisation : %d créés, %d mis à jour, %d mis à la corbeille (%d min %02d s)',
+                        $totals['created'],
+                        $totals['updated'],
+                        $totals['trashed'],
+                        intdiv( $duration, 60 ),
+                        $duration % 60
+                ) );
         }
 
         /**

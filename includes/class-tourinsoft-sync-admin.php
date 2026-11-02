@@ -103,7 +103,23 @@ class Tourinsoft_Sync_Admin {
 				<?php if ( empty( $lines ) ) : ?>
 					<p>Le journal est vide.</p>
 				<?php else : ?>
-					<pre style="white-space: pre-wrap; max-height: 500px; overflow: auto; margin: 0;"><?php echo esc_html( implode( "\n", (array) $lines ) ); ?></pre>
+					<pre style="white-space: pre-wrap; max-height: 500px; overflow: auto; margin: 0;"><?php
+					foreach ( (array) $lines as $line ) {
+						// Couleur selon le niveau : rouge pour les erreurs, orange pour les avertissements.
+						// Le résumé de fin d'import est en gras pour être repéré facilement.
+						if ( false !== strpos( $line, '[ERROR]' ) ) {
+							$style = 'color: #d63638;';
+						} elseif ( false !== strpos( $line, '[WARNING]' ) ) {
+							$style = 'color: #b26200;';
+						} elseif ( false !== strpos( $line, 'Fin de la synchronisation' ) ) {
+							$style = 'font-weight: 600;';
+						} else {
+							$style = '';
+						}
+
+						echo '<span style="' . esc_attr( $style ) . '">' . esc_html( $line ) . "</span>\n";
+					}
+					?></pre>
 				<?php endif; ?>
 			</div>
 		</div>

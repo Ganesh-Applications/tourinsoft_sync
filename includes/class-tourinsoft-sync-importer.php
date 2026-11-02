@@ -19,6 +19,9 @@ class Tourinsoft_Sync_Importer
         private $num_updated_posts = 0;
         private $num_created_posts = 0;
 
+        //-- Totaux tous post types confondus, pour le résumé de fin d'import
+        private $totals = ['created' => 0, 'updated' => 0, 'trashed' => 0];
+
         //-- IDs des termes déjà trouvés pendant l'import : [taxonomie][ThesID] => ID du terme
         private $terms_cache = [];
 
@@ -105,7 +108,21 @@ class Tourinsoft_Sync_Importer
                                 . "{$this->num_created_posts} créés, {$this->num_updated_posts} mis à jour, "
                                 . "{$num_trashed_posts} mis à la corbeille."
                         );
+
+                        $this->totals['created'] += $this->num_created_posts;
+                        $this->totals['updated'] += $this->num_updated_posts;
+                        $this->totals['trashed'] += $num_trashed_posts;
                 }
+        }
+
+        /**
+         * Totaux de l'import, tous post types confondus.
+         *
+         * @return array{created: int, updated: int, trashed: int}
+         */
+        public function get_totals(): array
+        {
+                return $this->totals;
         }
 
         /**
