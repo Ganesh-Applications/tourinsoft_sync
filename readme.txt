@@ -17,7 +17,9 @@ Voir README.md pour la documentation complète.
 
 * WordPress 6.5 ou plus
 * PHP 7.4 ou plus
-* Advanced Custom Fields PRO 6.1 ou plus. Les post types à synchroniser doivent être créés depuis ACF (menu « ACF → Post Types »), car c'est là que se règle le flux Tourinsoft.
+* Advanced Custom Fields PRO 6.1 ou plus.
+
+Le flux Tourinsoft et les chemins des champs se règlent soit dans le code (argument `tourinsoft_flux` de register_post_type(), réglages `tourinsoft_*` des champs ACF déclarés en PHP), soit dans l'admin ACF. Voir README.md.
 
 == Installation ==
 

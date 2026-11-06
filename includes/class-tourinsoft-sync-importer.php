@@ -28,7 +28,7 @@ class Tourinsoft_Sync_Importer
         /**
          * Importe les données depuis Tourinsoft et les insère dans WordPress.
          *
-         *   1. Parcourt les post types déclarés dans ACF ayant un réglage 'tourinsoft_flux'
+         *   1. Parcourt les post types ayant un flux Tourinsoft (déclarés en code ou dans ACF, voir get_post_types_to_import())
          *   2. Télécharge et décode le flux JSON pour chaque post type
          *   3. Crée les posts non existants trouvés dans le flux
          *   4. Pour chaque post, récupère les champs ACF qui ont un 'tourinsoft_path'
@@ -41,22 +41,22 @@ class Tourinsoft_Sync_Importer
         public function import()
         {
                 //-- Sans ACF Pro, rien ne peut fonctionner : on s'arrête tout de suite
-                if (!function_exists('acf_get_acf_post_types'))
+                if (!function_exists('acf_get_field_groups'))
                 {
                         Tourinsoft_Sync_Logger::error('ACF Pro n’est pas actif. Le plugin Tourinsoft Sync nécessite ACF Pro pour fonctionner.');
                         return;
                 }
 
-                foreach (acf_get_acf_post_types() as $post_type)
+                $post_types_to_import = $this->get_post_types_to_import();
+
+                if (!$post_types_to_import)
+                        Tourinsoft_Sync_Logger::warning('Aucun post type n\'a de flux Tourinsoft : rien à importer.');
+
+                foreach ($post_types_to_import as $post_type => $tourinsoft_flux)
                 {
-                        //-- Filtre pour ne garder que les post types ayant un flux Tourinsoft défini.
-                        $tourinsoft_flux = $post_type['tourinsoft_flux'] ?? null;
+                        Tourinsoft_Sync_Logger::info("Import du flux Tourinsoft '{$tourinsoft_flux}' pour le post type '{$post_type}'");
 
-                        if (!$tourinsoft_flux) continue;
-
-                        Tourinsoft_Sync_Logger::info("Import du flux Tourinsoft '{$tourinsoft_flux}' pour le post type '{$post_type['post_type']}'");
-
-                        $fields_to_import = $this->get_fields_to_import($post_type['post_type']);
+                        $fields_to_import = $this->get_fields_to_import($post_type);
 
                         $flux_data = $this->get_flux_data($tourinsoft_flux);
 
@@ -81,7 +81,7 @@ class Tourinsoft_Sync_Importer
                                 //-- même s'il est ignoré ci-dessous.
                                 $active_post_ids[] = $element['SyndicObjectID'];
 
-                                $post_id = $this->get_or_create_post($post_type['post_type'], $element);
+                                $post_id = $this->get_or_create_post($post_type, $element);
 
                                 //-- Élément ignoré ou création du post impossible
                                 if (!$post_id) continue;
@@ -98,7 +98,7 @@ class Tourinsoft_Sync_Importer
                         }
 
                         //-- Met à la corbeille les posts qui ne sont plus présents dans le flux Tourinsoft
-                        $num_trashed_posts = $this->trash_inactive_posts($post_type['post_type'], $active_post_ids);
+                        $num_trashed_posts = $this->trash_inactive_posts($post_type, $active_post_ids);
 
                         Tourinsoft_Sync_Logger::info(
                                 "Import terminé pour le flux Tourinsoft '{$tourinsoft_flux}' : "
@@ -110,6 +110,76 @@ class Tourinsoft_Sync_Importer
                         $this->totals['updated'] += $this->num_updated_posts;
                         $this->totals['trashed'] += $num_trashed_posts;
                 }
+        }
+
+        /**
+         * Liste les post types à importer, avec l'URL de leur flux.
+         *
+         * Le flux peut être défini à deux endroits :
+         *   1. dans le code : argument 'tourinsoft_flux' de register_post_type() ;
+         *   2. dans l'admin ACF : onglet « Tourinsoft » d'un post type créé dans ACF.
+         *
+         * Si un même post type a un flux aux deux endroits, celui du code est utilisé.
+         * Le filtre 'tourinsoft_sync_post_types' permet ensuite d'ajouter, de modifier
+         * ou de retirer des flux.
+         *
+         * @return array<string, string> [slug du post type] => URL du flux
+         */
+        private function get_post_types_to_import(): array
+        {
+                $flux_by_post_type = [];
+
+                //-- 1. Post types créés dans l'admin ACF
+                if (function_exists('acf_get_acf_post_types'))
+                {
+                        foreach (acf_get_acf_post_types() as $acf_post_type)
+                        {
+                                $flux = trim($acf_post_type['tourinsoft_flux'] ?? '');
+
+                                if ($flux !== '' && !empty($acf_post_type['post_type']))
+                                        $flux_by_post_type[$acf_post_type['post_type']] = $flux;
+                        }
+                }
+
+                //-- 2. Post types déclarés dans le code : WordPress garde les arguments inconnus
+                //      de register_post_type() comme propriétés de l'objet WP_Post_Type.
+                foreach (get_post_types([], 'objects') as $slug => $post_type_object)
+                {
+                        $flux = isset($post_type_object->tourinsoft_flux) ? trim((string) $post_type_object->tourinsoft_flux) : '';
+
+                        if ($flux === '') continue;
+
+                        if (isset($flux_by_post_type[$slug]) && $flux_by_post_type[$slug] !== $flux)
+                                Tourinsoft_Sync_Logger::warning("Le post type '{$slug}' a un flux dans le code et un autre dans ACF : celui du code est utilisé.");
+
+                        $flux_by_post_type[$slug] = $flux;
+                }
+
+                /**
+                 * Filtre la liste des flux à importer.
+                 *
+                 * @param array<string, string> $flux_by_post_type [slug du post type] => URL du flux
+                 */
+                $flux_by_post_type = apply_filters('tourinsoft_sync_post_types', $flux_by_post_type);
+
+                $post_types_to_import = [];
+
+                foreach ((array) $flux_by_post_type as $slug => $flux)
+                {
+                        $flux = trim((string) $flux);
+
+                        if ($flux === '') continue;
+
+                        if (!post_type_exists($slug))
+                        {
+                                Tourinsoft_Sync_Logger::warning("Flux ignoré pour le post type '{$slug}' : ce post type n'est pas enregistré.");
+                                continue;
+                        }
+
+                        $post_types_to_import[$slug] = $flux;
+                }
+
+                return $post_types_to_import;
         }
 
         /**
