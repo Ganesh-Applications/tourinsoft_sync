@@ -1,0 +1,10 @@
+  {
+    "name": "ganesh-applications/tourinsoft-sync",
+    "type": "wordpress-plugin",
+    "description": "Synchronisation Tourinsoft",
+    "require": {
+      "php": ">=8.1",
+      "composer/installers": "^2.0"
+    }
+  }
+  
