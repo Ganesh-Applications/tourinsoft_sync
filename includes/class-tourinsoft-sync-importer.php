@@ -602,16 +602,36 @@ class Tourinsoft_Sync_Importer
                         $file_name .= '.' . ($extensions[wp_get_image_mime($tmp_file)] ?? 'jpg');
                 }
 
-                //-- Ajout à la médiathèque (copie du fichier + génération des miniatures).
-                //-- 0 : le média n'est rattaché à aucun post.
-                $attachment_id = media_handle_sideload(
-                        ['name' => $file_name, 'tmp_name' => $tmp_file],
-                        0,
-                        null,
-                        //-- Légende et description lues dans le flux. Pour celles qui manquent,
-                        //-- WordPress garde ce qu'il trouve dans les métadonnées de la photo.
-                        $media_texts
-                );
+                //-- Certaines photos ont des métadonnées EXIF abîmées (endianness invalide, date mal formée…).
+                //-- WordPress émet alors des avertissements (exif_read_data(), wp_exif_date2ts()…) qu'un
+                //-- gestionnaire d'erreurs comme celui d'Acorn convertit en exception, ce qui stoppe tout l'import.
+                //-- On ignore les avertissements émis par wp-admin/includes/image.php le temps de l'ajout :
+                //-- l'image est importée, avec les métadonnées que WordPress a réussi à lire.
+                $previous_handler = set_error_handler(function ($errno, $errstr, $errfile = '', ...$args) use (&$previous_handler) {
+                        if (str_ends_with(wp_normalize_path($errfile), 'wp-admin/includes/image.php')) {
+                                return true;
+                        }
+                        return $previous_handler ? $previous_handler($errno, $errstr, $errfile, ...$args) : false;
+                }, E_WARNING | E_NOTICE | E_DEPRECATED);
+
+                try {
+                        //-- Ajout à la médiathèque (copie du fichier + génération des miniatures).
+                        //-- 0 : le média n'est rattaché à aucun post.
+                        $attachment_id = media_handle_sideload(
+                                ['name' => $file_name, 'tmp_name' => $tmp_file],
+                                0,
+                                null,
+                                //-- Légende et description lues dans le flux. Pour celles qui manquent,
+                                //-- WordPress garde ce qu'il trouve dans les métadonnées de la photo.
+                                $media_texts
+                        );
+                } catch (Throwable $e) {
+                        //-- Une image en échec ne doit pas stopper tout l'import : elle est traitée
+                        //-- comme une erreur WordPress (log + image ignorée) juste en dessous.
+                        $attachment_id = new WP_Error('tourinsoft_sideload', $e->getMessage());
+                } finally {
+                        restore_error_handler();
+                }
 
                 if (is_wp_error($attachment_id))
                 {
